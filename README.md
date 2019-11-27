@@ -293,12 +293,11 @@ If you are getting the following error:
 
 You need to use the `docker info` command to check your docker version and use it to grab the correct corresponding version of `docker2singularity`. For example:
 
-```bash
-     docker run \        
+     docker run \
      -v /var/run/docker.sock:/var/run/docker.sock \
      -v D:\host\path\where\to\output\singularity\image:/output \
      --privileged -t --rm \
-     singularityware/docker2singularity:1.11 \            
+     singularityware/docker2singularity:1.11 \
      ubuntu:14.04
 ```
 
@@ -308,12 +307,11 @@ Currently only the 1.10, 1.11, 1.12, and 1.13  versions are supported. If you ar
 ### My cluster/HPC requires Singularity images to include specific mount points
 If you are getting `WARNING: Non existant bind point (directory) in container: '/shared_fs'` or a similar error when running your Singularity image that means that your Singularity images require custom mount points. To make the error go away you can specify the mount points required by your system when creating the Singularity image:
 
-```bash
-     docker run \        
+     docker run \
      -v /var/run/docker.sock:/var/run/docker.sock \
      -v D:\host\path\where\to\output\singularity\image:/output \
      --privileged -t --rm \
-     quay.io/singularity/docker2singularity \            
+     singularityware/docker2singularity \
      -m "/shared_fs /custom_mountpoint2" \
      ubuntu:14.04
 ```
@@ -352,7 +350,7 @@ Don't forget to read the [CONTRIBUTING.md](.github/CONTRIBUTING.md) along with t
 
 ## Acknowledgements
 
-This work is heavily based on the `docker2singularity` work done by [vsoch](https://github.com/vsoch) 
+This work is heavily based on the `docker2singularity` work done by [vsoch](https://github.com/vsoch)
 and [gmkurtzer](https://github.com/gmkurtzer). The original record of the work can be read about
 in [this commit](https://github.com/singularityhub/docker2singularity/commit/d174cadefd90f77f302f4bef5a8cd089eb2da2e4).
 Thank you kindly to all the [contributors](.github/AUTHORS.md), and please open an issue if you need help.

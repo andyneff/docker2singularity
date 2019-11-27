@@ -47,7 +47,7 @@ function usage() {
               --writable -w   non-production writable image (ext3)
                               Default is squashfs (recommended) (deprecated)
               --name     -n   provide basename for the container (default based on URI)
-              --mount    -m   provide list of custom mount points (in quotes!)
+              --mount    -m   provide list of custom mount points (can be used multiple times)
               --custom   -c   set custom script path for step 9 (default /custom/tosingularity)
               --help     -h   show this help and exit
               "
@@ -59,7 +59,7 @@ if [ $# = 0 ] ; then
     exit 0;
 fi
 
-mount_points="/oasis /projects /scratch /local-scratch /work /home1 /corral-repl /corral-tacc /beegfs /share/PI /extra /data /oak"
+mount_points=()
 image_format="squashfs"
 new_container_name=""
 custom_script=/custom/tosingularity
@@ -78,7 +78,7 @@ while true; do
         ;;
         -m|--mount)
           shift
-          mount_points="${1:-}"
+          mount_points+=("${1}")
           shift
         ;;
         -o|--option)
@@ -291,31 +291,39 @@ echo "(5/11) Setting ENV variables..."
 mkdir -p $build_sandbox/.singularity.d/env
 chmod 755 $build_sandbox/.singularity.d/env
 
-# Then customize by adding Docker variables
-docker run --rm --entrypoint="/usr/bin/env" $image > $TMPDIR/docker_environment
-# do not include HOME and HOSTNAME - they mess with local config
-sed -i '/^HOME/d' $TMPDIR/docker_environment
-sed -i '/^HOSTNAME/d' $TMPDIR/docker_environment
-sed -i 's/^/export /' $TMPDIR/docker_environment
-# add quotes around the variable names. This will NOT work with vars that have newlines
-# escape '
-sed -i "s/'/'\"'\"'/" $TMPDIR/docker_environment
-sed -i "s/=/='/" $TMPDIR/docker_environment
-sed -i "s/$/'/" $TMPDIR/docker_environment
-cp $TMPDIR/docker_environment $build_sandbox/.singularity.d/env/10-docker.sh
+# # Then customize by adding Docker variables
+# docker run --rm --entrypoint="/usr/bin/env" $image > $TMPDIR/docker_environment
+# # do not include HOME and HOSTNAME - they mess with local config
+# sed -i '/^HOME/d' $TMPDIR/docker_environment
+# sed -i '/^HOSTNAME/d' $TMPDIR/docker_environment
+# sed -i 's/^/export /' $TMPDIR/docker_environment
+# # add quotes around the variable names. This will NOT work with vars that have newlines
+# # escape '
+# sed -i "s/'/'\"'\"'/" $TMPDIR/docker_environment
+# sed -i "s/=/='/" $TMPDIR/docker_environment
+# sed -i "s/$/'/" $TMPDIR/docker_environment
+# cp $TMPDIR/docker_environment $build_sandbox/.singularity.d/env/10-docker.sh
+
+python /addEnv.py "${image}" > "${build_sandbox}/.singularity.d/env/10-docker.sh"
+
 chmod +x $build_sandbox/.singularity.d/env/10-docker.sh;
 rm -rf $TMPDIR
 
 ################################################################################
 ### Permissions ################################################################
 ################################################################################
-if [ "${mount_points}" ] ; then
-    echo "(6/11) Adding mount points..."
-    for mount_point in ${mount_points}; do
-        mkdir -p "${build_sandbox}/${mount_point}"
-    done
+if [ " ""${mount_points[@]+set}" = " set" ] ; then
+  echo "(6/11) Adding mount points..."
+  for mount_point in ${mount_points}; do
+    if [ "${mount_point: -1}" = "/" ]; then
+      mkdir -p "${build_sandbox}/${mount_point}"
+    else
+      mkdir -p "$(dirname "${build_sandbox}/${mount_point}")"
+      touch "${build_sandbox}/${mount_point}"
+    fi
+  done
 else
-    echo "(6/11) Skipping mount points..."
+  echo "(6/11) Skipping mount points..."
 fi
 
 
@@ -332,6 +340,8 @@ docker rm $container_id >> /dev/null
 echo "(9/11) Custom script..."
 if [ -r "${custom_script}" ]; then
   source "${custom_script}"
+else
+  echo "(9/11) No custom script..."
 fi
 if [ -r "${build_sandbox}/${custom_script}" ]; then
   source "${build_sandbox}/${custom_script}"
