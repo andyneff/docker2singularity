@@ -33,8 +33,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-set -o errexit
-set -o nounset
+set -eu
 
 function usage() {
 
@@ -45,7 +44,7 @@ function usage() {
           Image Format
               --folder   -f   build development sandbox (folder)
               --option   -o   add a custom option to build (-o --fakeroot or -option 'section post' )
-              --writable -w   non-production writable image (ext3)         
+              --writable -w   non-production writable image (ext3)
                               Default is squashfs (recommended) (deprecated)
               --name     -n   provide basename for the container (default based on URI)
               --mount    -m   provide list of custom mount points (in quotes!)
@@ -55,7 +54,7 @@ function usage() {
 }
 
 # --- Option processing --------------------------------------------
-if [ $# == 0 ] ; then
+if [ $# = 0 ] ; then
     usage
     exit 0;
 fi
@@ -69,51 +68,54 @@ options=""
 while true; do
     case ${1:-} in
         -h|--help|help)
-            usage
-            exit 0
+          usage
+          exit 0
         ;;
         -n|--name)
-            shift
-            new_container_name="${1:-}"
-            shift
+          shift
+          new_container_name="${1:-}"
+          shift
         ;;
         -m|--mount)
-            shift
-            mount_points="${1:-}"
-            shift
+          shift
+          mount_points="${1:-}"
+          shift
         ;;
         -o|--option)
-            shift
-            options="${1:-} ${options}"
-            shift
+          shift
+          options="${1:-} ${options}"
+          shift
         ;;
         -f|--folder)
-            shift
-            image_format="sandbox"
+          shift
+          image_format="sandbox"
         ;;
         -w|--writable)
-            shift
-            image_format="writable"
+          shift
+          image_format="writable"
         ;;
         -c|--custom)
-            shift
-            custom_script="${1:-}"
-            shift
-        :) printf "missing argument for -%s\n" "$option" >&2
-           usage
-           exit 1
-        ;;
-        \?) printf "illegal option: -%s\n" "$option" >&2
-            usage
-            exit 1
+          shift
+          custom_script="${1:-}"
+          shift
+            ;;
+        :)
+          printf "missing argument for -%s\n" "$option" >&2
+          usage
+          exit 1
+          ;;
+        \?)
+          printf "illegal option: -%s\n" "$option" >&2
+          usage
+          exit 1
         ;;
         -*)
-            printf "illegal option: -%s\n" "$option" >&2
-            usage
-            exit 1
+          printf "illegal option: -%s\n" "$option" >&2
+          usage
+          exit 1
         ;;
         *)
-            break;
+          break;
         ;;
     esac
 done
@@ -276,6 +278,7 @@ elif [ -n "$ENTRYPOINT" ]; then
 fi
 
 chmod +x $build_sandbox/.singularity.d/runscript;
+cp $build_sandbox/.singularity.d/runscript $build_sandbox/.singularity.d/startscript
 
 ################################################################################
 ### SINGULARITY ENVIRONMENT ####################################################
@@ -294,9 +297,11 @@ docker run --rm --entrypoint="/usr/bin/env" $image > $TMPDIR/docker_environment
 sed -i '/^HOME/d' $TMPDIR/docker_environment
 sed -i '/^HOSTNAME/d' $TMPDIR/docker_environment
 sed -i 's/^/export /' $TMPDIR/docker_environment
-# add quotes around the variable names
-sed -i 's/=/="/' $TMPDIR/docker_environment
-sed -i 's/$/"/' $TMPDIR/docker_environment
+# add quotes around the variable names. This will NOT work with vars that have newlines
+# escape '
+sed -i "s/'/'\"'\"'/" $TMPDIR/docker_environment
+sed -i "s/=/='/" $TMPDIR/docker_environment
+sed -i "s/$/'/" $TMPDIR/docker_environment
 cp $TMPDIR/docker_environment $build_sandbox/.singularity.d/env/10-docker.sh
 chmod +x $build_sandbox/.singularity.d/env/10-docker.sh;
 rm -rf $TMPDIR
@@ -311,7 +316,7 @@ if [ "${mount_points}" ] ; then
     done
 else
     echo "(6/11) Skipping mount points..."
-fi 
+fi
 
 
 # making sure that any user can read and execute everything in the container
@@ -338,7 +343,7 @@ if [ "$image_format" == "squashfs" ]; then
     new_container_name=${new_container_name}.sif
     singularity build ${options} ${new_container_name} $build_sandbox
 elif [ "$image_format" == "writable" ]; then
-    new_container_name=${new_container_name}.simg    
+    new_container_name=${new_container_name}.simg
     singularity build ${options} --writable ${new_container_name} $build_sandbox
 else
     mv $build_sandbox $new_container_name
