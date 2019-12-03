@@ -3,9 +3,6 @@
 # docker2singularity.sh will convert a docker image into a singularity
 # Must be run with sudo to use docker commands (eg aufs)
 #
-# NOTES:
-# If the docker image uses both ENTRYPOINT and CMD the latter will be ignored
-#
 # KNOWN ISSUES:
 # Currently ENTRYPOINTs and CMDs with commas in the arguments are not supported
 #
@@ -35,22 +32,25 @@
 
 set -eu
 
-function usage() {
+SINGULARITY_VERSION="$(singularity --version)"
+SINGULARITY_VERSION="${SINGULARITY_VERSION%-*}"
 
-    echo "USAGE: docker2singularity [-m \"/mount_point1 /mount_point2\"] [options] docker_image_name"
-    echo ""
-    echo "OPTIONS:
+function usage()
+{
+  echo "USAGE: docker2singularity [-m \"/mount_point1\" -m \"/mount_point2\"] [options] docker_image_name"
+  echo
+  echo "OPTIONS:
 
-          Image Format
-              --folder   -f   build development sandbox (folder)
-              --option   -o   add a custom option to build (-o --fakeroot or -option 'section post' )
-              --writable -w   non-production writable image (ext3)
-                              Default is squashfs (recommended) (deprecated)
-              --name     -n   provide basename for the container (default based on URI)
-              --mount    -m   provide list of custom mount points (can be used multiple times)
-              --custom   -c   set custom script path for step 9 (default /custom/tosingularity)
-              --help     -h   show this help and exit
-              "
+        Image Format
+            --folder   -f   build development sandbox (folder)
+            --option   -o   add a custom option to build (-o --fakeroot or -option 'section post' )
+            --writable -w   non-production writable image (ext3)
+                            Default is squashfs (recommended) (deprecated)
+            --name     -n   provide basename for the container (default based on URI)
+            --mount    -m   provide list of custom mount points (can be used multiple times)
+            --custom   -c   set custom script path for step 9 (default /custom/tosingularity)
+            --help     -h   show this help and exit
+            "
 }
 
 # --- Option processing --------------------------------------------
@@ -64,71 +64,67 @@ image_format="squashfs"
 custom_script=/custom/tosingularity
 options=()
 
-while true; do
-  case "${1:-}" in
+while (( $# )); do
+  arg="${1}"
+  shift 1
+
+  case "${arg}" in
     -h|--help|help)
       usage
       exit 0
-    ;;
+      ;;
     -n|--name)
-      shift
       new_container_name="${1}"
       shift
-    ;;
+      ;;
     -m|--mount)
-      shift
       mount_points+=("${1}")
       shift
-    ;;
+      ;;
     -o|--option)
-      shift
       options+=("${1}")
       shift
-    ;;
+      ;;
     -f|--folder)
-      shift
       image_format="sandbox"
-    ;;
+      ;;
     -w|--writable)
-      shift
       image_format="writable"
       options+=(--writable)
-    ;;
+      ;;
     -c|--custom)
+      custom_script="${1}"
       shift
-      custom_script="${1:-}"
-      shift
-        ;;
+      ;;
     :)
-      printf "missing argument for -%s\n" "${option}" >&2
+      printf "missing argument for -%s\n" "${options[*]}" >&2
       usage
       exit 1
       ;;
     \?)
-      printf "illegal option: -%s\n" "${option}" >&2
+      printf "illegal option: -%s\n" "${options[*]}" >&2
       usage
       exit 1
-    ;;
+      ;;
     -*)
-      printf "illegal option: -%s\n" "${option}" >&2
+      printf "illegal option: -%s\n" "${options[*]}" >&2
       usage
       exit 1
-    ;;
+      ;;
     *)
-      break;
-    ;;
+      image="${arg}"
+      ;;
   esac
 done
 
-image="${1}"
 
-echo ""
+echo
 echo "Image Format: ${image_format}"
 echo "Docker Image: ${image}"
 if [ -n "${new_container_name+set}" ]; then
     echo "Container Name: ${new_container_name}"
 fi
-echo ""
+echo
 
 ################################################################################
 ### CONTAINER RUNNING ID #######################################################
@@ -194,7 +190,12 @@ mkdir -p "${build_sandbox}"
 
 echo "(2/11) Exporting filesystem..."
 docker export "${container_id}" >> "${build_sandbox}.tar"
-tar -C "${build_sandbox}" -xf "${build_sandbox}.tar"
+
+if [ "${SINGULARITY_VERSION[0]}" -lt "3" ]; then
+  singularity image.import $build_sandbox < $build_sandbox.tar
+else
+  tar -C "${build_sandbox}" -xf "${build_sandbox}.tar"
+fi
 docker inspect "${container_id}" >> "${build_sandbox}/singularity.json"
 
 ################################################################################
@@ -207,6 +208,9 @@ export SINGULARITY_MESSAGELEVEL
 
 # For docker2singularity, installation is at /usr/local
 echo "(3/11) Creating labels..."
+if [ "${SINGULARITY_VERSION[0]}" -lt "3" ]; then
+  tar -C "${build_sandbox}" -xf /usr/local/libexec/singularity/bootstrap-scripts/environment.tar
+fi
 LABELS="$(docker inspect --format='{{json .Config.Labels}}' ${image})"
 LABELFILE="$(printf "%q" "${build_sandbox}/.singularity.d/labels.json")"
 ADD_LABEL=("/addLabel.py" "-f" "--file" "${LABELFILE}")
@@ -252,6 +256,7 @@ CMD="$(docker inspect --format='{{json .Config.Cmd}}' ${image} | shell_escape)"
 ENTRYPOINT="$(docker inspect --format='{{json .Config.Entrypoint}}' ${image} | shell_escape)"
 
 echo '#!/bin/sh' > "${build_sandbox}/.singularity.d/runscript"
+echo 'set -xv' >> "${build_sandbox}/.singularity.d/runscript"
 
 # Take working directory into account
 WORKINGDIR="$(docker inspect --format='{{json .Config.WorkingDir}}' ${image})"
@@ -263,15 +268,15 @@ fi
 if [ -n "${CMD}" ]; then
   echo 'if [ $# = 0 ]; then' >> "${build_sandbox}/.singularity.d/runscript"
   # Only add the entrypoint if it's not null
-  echo "  exec" ${ENTRYPOINT:+"${ENTRYPOINT}"} "${CMD}" >> "${build_sandbox}/.singularity.d/runscript;"
+  echo "  exec" ${ENTRYPOINT:+"${ENTRYPOINT}"} "${CMD}" >> "${build_sandbox}/.singularity.d/runscript"
   echo "else" >> "${build_sandbox}/.singularity.d/runscript"
-  echo "  exec" ${ENTRYPOINT:+"${ENTRYPOINT}"} '${@+"${@}"}' >> "${build_sandbox}/.singularity.d/runscript;"
+  echo "  exec" ${ENTRYPOINT:+"${ENTRYPOINT}"} '${@+"${@}"}' >> "${build_sandbox}/.singularity.d/runscript"
   echo "fi" >> "${build_sandbox}/.singularity.d/runscript"
 elif [ -n "${ENTRYPOINT}" ]; then
-  echo exec "${ENTRYPOINT}" '"$@"' >> "${build_sandbox}/.singularity.d/runscript;"
+  echo exec "${ENTRYPOINT}" '"$@"' >> "${build_sandbox}/.singularity.d/runscript"
 fi
 
-chmod +x "${build_sandbox}/.singularity.d/runscript";
+chmod +x "${build_sandbox}/.singularity.d/runscript"
 cp "${build_sandbox}/.singularity.d/runscript" "${build_sandbox}/.singularity.d/startscript"
 
 ################################################################################

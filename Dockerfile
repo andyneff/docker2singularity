@@ -9,6 +9,7 @@ RUN apk add --no-cache ca-certificates libseccomp squashfs-tools bash python3 rs
 COPY --from=builder /usr/local /usr/local
 ENV PATH="/usr/local/singularity/bin:$PATH"
 
-ADD docker2singularity.sh scripts addLabel.py addEnv.py /
+# ADD docker2singularity.sh scripts addLabel.py addEnv.py /
+ADD docker2singularity.sh addLabel.py addEnv.py /
 RUN chmod a+x docker2singularity.sh
 ENTRYPOINT ["docker-entrypoint.sh", "/docker2singularity.sh"]
