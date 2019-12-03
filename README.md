@@ -1,3 +1,7 @@
+This is a rewrite of the original docker2singularity repo, including all the versions except 2.3, which is fundamentally different and wasn't work the time.
+
+The script is cleaned up, and uses one branch for all the different versions. This MAY result in allowing you to try certain options that are not actually compatible with that version of singularity, but I'm not sure that is actually true.
+
 # `docker2singularity`
 
 <img src="img/logo.png" alt="https://www.sylabs.io/guides/latest/user-guide" data-canonical-src="https://www.sylabs.io/guides/latest/user-guide" width="200" height="200">

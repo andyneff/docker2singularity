@@ -32,8 +32,8 @@
 
 set -eu
 
-SINGULARITY_VERSION="$(singularity --version)"
-SINGULARITY_VERSION="${SINGULARITY_VERSION%-*}"
+SINGULARITY_VERSION="$(printf "%q\n" "$(singularity --version)")"
+# SINGULARITY_VERSION="${SINGULARITY_VERSION%-*}"
 
 function usage()
 {
@@ -164,8 +164,8 @@ creation_date="$(docker inspect --format="{{.Created}}" ${image})"
 
 size="$(docker inspect --format="{{.Size}}" ${image})"
 # convert size in MB
-size="$(echo $(($size/1000000+1)))"
-echo "Inspected Size: $size MB"
+size="$(echo $((${size}/1000000+1)))"
+echo "Inspected Size: ${size} MB"
 echo ""
 
 ################################################################################
@@ -191,8 +191,8 @@ mkdir -p "${build_sandbox}"
 echo "(2/11) Exporting filesystem..."
 docker export "${container_id}" >> "${build_sandbox}.tar"
 
-if [ "${SINGULARITY_VERSION[0]}" -lt "3" ]; then
-  singularity image.import $build_sandbox < $build_sandbox.tar
+if [ "${SINGULARITY_VERSION::1}" -lt "3" ]; then
+  singularity image.import "${build_sandbox}" < "${build_sandbox}.tar"
 else
   tar -C "${build_sandbox}" -xf "${build_sandbox}.tar"
 fi
@@ -208,7 +208,7 @@ export SINGULARITY_MESSAGELEVEL
 
 # For docker2singularity, installation is at /usr/local
 echo "(3/11) Creating labels..."
-if [ "${SINGULARITY_VERSION[0]}" -lt "3" ]; then
+if [ "${SINGULARITY_VERSION::1}" -lt "3" ]; then
   tar -C "${build_sandbox}" -xf /usr/local/libexec/singularity/bootstrap-scripts/environment.tar
 fi
 LABELS="$(docker inspect --format='{{json .Config.Labels}}' ${image})"
@@ -224,8 +224,6 @@ mkdir -p "${build_sandbox}/.singularity.d"
 touch "${LABELFILE}"
 
 # Extract some other "nice to know" metadata from docker
-SINGULARITY_version="$(singularity --version)"
-SINGULARITY_VERSION=$(printf "%q" "$SINGULARITY_version")
 DOCKER_VERSION=$(docker inspect --format='{{json .DockerVersion}}' ${image})
 DOCKER_ID=$(docker inspect --format='{{json .Id}}' ${image})
 
@@ -273,7 +271,7 @@ if [ -n "${CMD}" ]; then
   echo "  exec" ${ENTRYPOINT:+"${ENTRYPOINT}"} '${@+"${@}"}' >> "${build_sandbox}/.singularity.d/runscript"
   echo "fi" >> "${build_sandbox}/.singularity.d/runscript"
 elif [ -n "${ENTRYPOINT}" ]; then
-  echo exec "${ENTRYPOINT}" '"$@"' >> "${build_sandbox}/.singularity.d/runscript"
+  echo exec "${ENTRYPOINT}" '${@+"${@}"}' >> "${build_sandbox}/.singularity.d/runscript"
 fi
 
 chmod +x "${build_sandbox}/.singularity.d/runscript"
