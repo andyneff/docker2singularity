@@ -20,6 +20,6 @@ for version in "${versions[@]}"; do
   docker build -t "vsiri/docker2singularity:${version}" --build-arg "SINGULARITY_VERSION=${version}" .
 done
 
-# for version in "${versions[@]}"; do
-#   docker push "vsiri/docker2singularity:${version}"
-# done
+for version in "${versions[@]}"; do
+  docker push "vsiri/docker2singularity:${version}"
+done

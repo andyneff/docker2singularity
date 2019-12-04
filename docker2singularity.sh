@@ -33,7 +33,6 @@
 set -eu
 
 SINGULARITY_VERSION="$(printf "%q\n" "$(singularity --version)")"
-# SINGULARITY_VERSION="${SINGULARITY_VERSION%-*}"
 
 function usage()
 {
@@ -174,13 +173,12 @@ echo ""
 
 creation_date="$(echo ${creation_date} | cut -c1-10)"
 
-# The user has not provided a custom name
 if [ -z "${new_container_name+set}" ]; then
+  # The user has not provided a custom name
   new_container_name="/tmp/${image_name}-${creation_date}-${container_id}"
-# The user has provided a custom name
 else
+  # The user has provided a custom name
   new_container_name="/tmp/$(basename "${new_container_name}")"
-  new_container_name="${new_container_name%.*}"
 fi
 
 build_sandbox="${new_container_name}.build"
@@ -254,7 +252,6 @@ CMD="$(docker inspect --format='{{json .Config.Cmd}}' ${image} | shell_escape)"
 ENTRYPOINT="$(docker inspect --format='{{json .Config.Entrypoint}}' ${image} | shell_escape)"
 
 echo '#!/bin/sh' > "${build_sandbox}/.singularity.d/runscript"
-echo 'set -xv' >> "${build_sandbox}/.singularity.d/runscript"
 
 # Take working directory into account
 WORKINGDIR="$(docker inspect --format='{{json .Config.WorkingDir}}' ${image})"
@@ -336,13 +333,27 @@ fi
 # Build a final image from the sandbox
 echo "(10/11) Building ${image_format} container..."
 if [ "${image_format}" = "squashfs" ]; then
-    new_container_name="${new_container_name}.sif"
-    singularity build ${options[@]+"${options[@]}"} "${new_container_name}" "${build_sandbox}"
+  # Add extention if user didn't sppecify one
+  if [[ ${new_container_name} != *.* ]]; then
+    if [ "${SINGULARITY_VERSION::1}" -ge "3" ]; then
+      new_container_name="${new_container_name}.sif"
+    else
+      new_container_name="${new_container_name}.simg"
+    fi
+  fi
+
+  singularity build ${options[@]+"${options[@]}"} "${new_container_name}" "${build_sandbox}"
+  chown "${DOCKER_UID-0}:${DOCKER_GID-0}" "${new_container_name}"
 elif [ "${image_format}" = "writable" ]; then
+  # Add extention if user didn't sppecify one
+  if [[ ${new_container_name} != *.* ]]; then
     new_container_name="${new_container_name}.simg"
-    singularity build ${options[@]+"${options[@]}"} "${new_container_name}" "${build_sandbox}"
+  fi
+
+  singularity build ${options[@]+"${options[@]}"} "${new_container_name}" "${build_sandbox}"
+  chown "${DOCKER_UID-0}:${DOCKER_GID-0}" "${new_container_name}"
 else
-    mv "${build_sandbox}" "${new_container_name}"
+  mv "${build_sandbox}" "${new_container_name}"
 fi
 
 echo "(11/11) Moving the image to the output folder..."

@@ -12,7 +12,6 @@ COPY --from=builder /usr/local /usr/local
 # Only needed for v3+
 ENV PATH="/usr/local/singularity/bin:$PATH"
 
-# ADD docker2singularity.sh scripts addLabel.py addEnv.py /
 ADD docker2singularity.sh addLabel.py addEnv.py /
-RUN chmod a+x docker2singularity.sh
-ENTRYPOINT ["docker-entrypoint.sh", "/docker2singularity.sh"]
+
+ENTRYPOINT ["/usr/bin/env", "bash", "/docker2singularity.sh"]
