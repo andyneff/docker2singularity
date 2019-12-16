@@ -1,4 +1,4 @@
-#! /bin/bash
+#!/usr/bin/env bash
 #
 # docker2singularity.sh will convert a docker image into a singularity
 # Must be run with sudo to use docker commands (eg aufs)
@@ -33,6 +33,7 @@
 set -eu
 
 SINGULARITY_VERSION="$(printf "%q\n" "$(singularity --version)")"
+SINGULARITY_VERSION="${SINGULARITY_VERSION##* }"
 
 function usage()
 {
